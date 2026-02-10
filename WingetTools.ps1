@@ -49,19 +49,29 @@ function Load-OrInitState {
 
     if (Test-Path -LiteralPath $StatePath) {
         try {
-            return (Get-Content -LiteralPath $StatePath -Encoding UTF8 | ConvertFrom-Json)
+            $raw = Get-Content -LiteralPath $StatePath -Raw -Encoding UTF8
+            if (-not $raw.Trim()) { throw "Empty state file" }
+
+            $obj = $raw | ConvertFrom-Json
+            if ($null -eq $obj -or -not $obj.installs) {
+                throw "Invalid state structure"
+            }
+
+            return $obj
         } catch {
-            throw "Failed to parse state file: $StatePath. $_"
+            Write-Warning "State file invalid, reinitializing: $StatePath"
         }
     }
 
+    # guaranteed non-null state
     return [pscustomobject]@{
-        createdAt      = (Get-Date).ToString('o')
-        lastInstallAt  = $null
-        lastUninstallAt= $null
-        installs       = @()
+        createdAt       = (Get-Date).ToString('o')
+        lastInstallAt   = $null
+        lastUninstallAt = $null
+        installs        = @()
     }
 }
+
 
 function Save-State {
     param(
@@ -78,9 +88,13 @@ function Add-InstallRecord {
         [Parameter(Mandatory)][string]$Id
     )
 
-    # Avoid duplicate records across multiple runs (idempotent-ish)
-    $existing = @($State.installs | Where-Object { $_.id -eq $Id -and -not $_.uninstalledAt })
-    if ($existing.Count -gt 0) { return }
+    if ($null -eq $State.installs) {
+        $State | Add-Member -MemberType NoteProperty -Name installs -Value @() -Force
+    }
+
+    if ($State.installs | Where-Object { $_.id -eq $Id -and -not $_.uninstalledAt }) {
+        return
+    }
 
     $State.installs += [pscustomobject]@{
         id            = $Id
@@ -105,6 +119,11 @@ $uninstallDir = Join-Path $PSScriptRoot 'uninstall'
 New-Item -ItemType Directory -Path $uninstallDir -Force | Out-Null
 $statePath = Join-Path $uninstallDir 'WingetTools.state.json'
 $state = Load-OrInitState -StatePath $statePath
+
+if ($null -eq $state) {
+    throw "Internal error: state initialization failed"
+}
+
 
 foreach ($id in $ids) {
     if (Test-WingetIdInstalled -Id $id) {

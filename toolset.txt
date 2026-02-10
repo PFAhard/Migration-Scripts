@@ -20,3 +20,4 @@ Rustlang.Rustup
 Telegram.TelegramDesktop
 Microsoft.VisualStudioCode
 Microsoft.WindowsTerminal
+Flameshot.Flameshot
