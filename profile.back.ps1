@@ -1,11 +1,6 @@
-# Instead of Path
-function cl {
-  & "C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64\cl.exe" @args
-}
-
 # ssh array
 function germany {
- ssh root@5.104.75.131
+ ssh root@144.31.180.211
 }
 function pihole {
  ssh pfapostol@pi.hole
@@ -31,6 +26,26 @@ function work {
  }
 }
 
+function appdata {
+ param([string]$subdir)
+
+ if ($subdir) {
+ Set-Location (Join-Path "C:\Users\pfapostol\AppData" $subdir)
+ } else {
+ Set-Location "C:\Users\pfapostol\AppData"
+ }
+}
+
+function localdata {
+ param([string]$subdir)
+
+ if ($subdir) {
+ Set-Location (Join-Path "C:\Users\pfapostol\AppData\Local" $subdir)
+ } else {
+ Set-Location "C:\Users\pfapostol\AppData\Local"
+ }
+}
+
 Register-ArgumentCompleter -CommandName slcode -ParameterName subdir -ScriptBlock {
     param($commandName, $parameterName, $wordToComplete)
     $base = "Z:\code"
@@ -48,8 +63,6 @@ Register-ArgumentCompleter -CommandName work -ParameterName subdir -ScriptBlock 
             $_.Name
         }
 }
-
-
 function slpiper {
  Set-Location Z:\piper_home
 }
@@ -68,6 +81,76 @@ function sllocal {
 function slroaming {
  Set-Location C:\Users\pfapostol\AppData\Roaming
 }
+
+
+# Utils arrays
+function jqout {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory, Position = 0)]
+        [string] $Filter,
+
+        [string] $Root = '.\out',
+
+        [switch] $First,
+
+        [switch] $WithFile,
+
+        [ValidateRange(1, 500)]
+        [int] $BatchSize = 50,
+
+        [string[]] $JqArgs = @()
+    )
+
+    $files = @(
+        Get-ChildItem -LiteralPath $Root -Recurse -File -Filter '*.json' |
+            Sort-Object FullName |
+            ForEach-Object { $_.FullName }
+    )
+
+    if ($files.Count -eq 0) {
+        return
+    }
+
+    $body = "($Filter)"
+    if ($WithFile) {
+        $body = "$body | {file: input_filename, result: .}"
+    }
+
+    for ($i = 0; $i -lt $files.Count; $i += $BatchSize) {
+        $end = [Math]::Min($i + $BatchSize - 1, $files.Count - 1)
+        $batch = $files[$i..$end]
+
+        $jqFilter = if ($First) {
+            "first(inputs | $body)"
+        } else {
+            "inputs | $body"
+        }
+
+        if ($First) {
+            & jq -C -e @JqArgs -n $jqFilter @batch
+        }
+        else {
+            & jq -C @JqArgs -n $jqFilter @batch
+        }
+
+        $exitCode = $LASTEXITCODE
+
+        if ($First -and $exitCode -eq 4) {
+            continue
+        }
+
+        if ($exitCode -ne 0) {
+            throw "jq failed with exit code $exitCode."
+        }
+
+        if ($First) {
+            return
+        }
+    }
+}
+
+
 
 # Docker Array
 function foundry-docker {
@@ -130,5 +213,4 @@ function apktool { java -jar "C:\Users\pfapostol\Desktop\AndroidReverse\tools\ap
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 chcp 65001 | Out-Null
-
 

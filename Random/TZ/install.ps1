@@ -1,4 +1,4 @@
-$script = "c:\Users\pfapostol\Desktop\Migration Scripts\Random\TzRotate.ps1"
+$script = "C:\Users\pfapostol\Desktop\Migration Scripts\Random\TZ\TzRotate.ps1"
 
 $action = New-ScheduledTaskAction `
     -Execute 'PowerShell.exe' `
